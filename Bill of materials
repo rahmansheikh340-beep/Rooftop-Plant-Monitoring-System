@@ -1,0 +1,15 @@
+List of Component with Price
+
+
+No	Particulars	Specification	    Qty.	  Unit Price (Taka)  	Total Price (Taka)
+1	    Node MCU	ESP32	             1	          1000	              1000
+2	    SMPS	5v 7a                	 1	          550	                550
+3	    Ultrasonic Sensor	SR-04	     3	          250  	              750
+4	    Soil Moisture Sensor		     1	          250	                250
+5	    PH Sensor		                 1	          2500	              2500
+6	    LCD Display	16*2	           1	          400	                400
+7	    Pump Motor	DC 5V	           2	          200	                400
+8	    Relay Module		             2	          150	                300
+9	    Others			          	                                      500
+                  	                                          Total	6650/=
+  
