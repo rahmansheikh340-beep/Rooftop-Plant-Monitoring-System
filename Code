@@ -1,0 +1,191 @@
+
+#include <WiFi.h> // ESP32 Wi-Fi library
+#include <DHT.h>
+#include <Adafruit_MQTT.h>
+#include <Adafruit_MQTT_Client.h>
+#include <LiquidCrystal_I2C.h>
+
+// WiFi credentials
+#define WIFI_SSID       "abcde"
+#define WIFI_PASS       "123456789"
+
+// Adafruit IO credentials
+#define AIO_SERVER      "io.adafruit.com"
+#define AIO_SERVERPORT  1883
+#define AIO_USERNAME    "rahat124"
+#define AIO_KEY         "aio_UqQg97XrRWuM2V1oB7AyeBKoEgAX"
+
+// Pin Definitions
+#define DHTPIN          4    // GPIO pin for DHT11
+#define DHTTYPE         DHT11
+#define PH_SENSOR_PIN   34   // Analog pin for pH sensor
+#define MOISTURE_SENSOR_PIN 35 // Analog pin for soil moisture sensor
+#define RELAY_PIN       25   // GPIO pin for relay module
+#define RELAY2_PIN      26  // Define another GPIO pin for second relay
+
+// Sonar sensor pins (HC-SR04)
+#define TRIG_PIN1       18
+#define ECHO_PIN1       19
+#define TRIG_PIN2       5
+#define ECHO_PIN2       17
+#define TRIG_PIN3       32
+#define ECHO_PIN3       33
+
+// MQTT topics
+#define TEMP_FEED       AIO_USERNAME "/feeds/temperature"
+#define HUMID_FEED      AIO_USERNAME "/feeds/humidity"
+#define PH_FEED         AIO_USERNAME "/feeds/ph"
+#define DIST1_FEED      AIO_USERNAME "/feeds/distance1"
+#define DIST2_FEED      AIO_USERNAME "/feeds/distance2"
+#define DIST3_FEED      AIO_USERNAME "/feeds/distance3"
+
+// Global variables
+WiFiClient client;
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+Adafruit_MQTT_Publish tempFeed(&mqtt, TEMP_FEED);
+Adafruit_MQTT_Publish humidFeed(&mqtt, HUMID_FEED);
+Adafruit_MQTT_Publish phFeed(&mqtt, PH_FEED);
+Adafruit_MQTT_Publish dist1Feed(&mqtt, DIST1_FEED);
+Adafruit_MQTT_Publish dist2Feed(&mqtt, DIST2_FEED);
+Adafruit_MQTT_Publish dist3Feed(&mqtt, DIST3_FEED);
+
+DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+void connectWiFi() {
+  Serial.println("Connecting to WiFi...");
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  int retryCount = 0;
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+    retryCount++;
+    if (retryCount > 20) { // After 10 seconds, restart WiFi
+      Serial.println("\nRestarting WiFi...");
+      WiFi.disconnect();
+      WiFi.reconnect();
+      retryCount = 0;
+    }
+  }
+  Serial.println("\nWiFi Connected!");
+}
+
+void connectToAdafruitIO() {
+  Serial.println("Connecting to Adafruit IO...");
+  int8_t ret;
+  while ((ret = mqtt.connect()) != 0) {
+    Serial.println(mqtt.connectErrorString(ret));
+    Serial.println("Retrying Adafruit IO connection...");
+    delay(5000);
+  }
+  Serial.println("Connected to Adafruit IO");
+}
+
+float readPH() {
+  int sensorValue = analogRead(PH_SENSOR_PIN);
+  float phValue = (sensorValue * 5.50 / 4095.0);
+  return phValue;
+}
+
+// Function to measure distance using HC-SR04
+float getDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  
+  long duration = pulseIn(echoPin, HIGH);
+  float distance = duration * 0.034 / 2; // Convert to cm
+  return distance;
+}
+
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+  connectWiFi();
+
+  lcd.begin(16, 2);
+  lcd.init();
+  lcd.backlight();
+
+  // Initialize sonar sensors
+  pinMode(MOISTURE_SENSOR_PIN, INPUT);
+  pinMode(TRIG_PIN1, OUTPUT);
+  pinMode(ECHO_PIN1, INPUT);
+  pinMode(TRIG_PIN2, OUTPUT);
+  pinMode(ECHO_PIN2, INPUT);
+  pinMode(TRIG_PIN3, OUTPUT);
+  pinMode(ECHO_PIN3, INPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+  pinMode(RELAY2_PIN, OUTPUT);
+
+}
+
+void loop() {
+  if (!mqtt.connected()) {
+    connectToAdafruitIO();
+  }
+
+  // Read sensors
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
+  float phValue = readPH();
+  float distance1 = getDistance(TRIG_PIN1, ECHO_PIN1);
+  float distance2 = getDistance(TRIG_PIN2, ECHO_PIN2);
+  float distance3 = getDistance(TRIG_PIN3, ECHO_PIN3);
+   int m = digitalRead(MOISTURE_SENSOR_PIN);
+
+  // Check if readings are valid
+  if (isnan(temperature) || isnan(humidity) || isnan(phValue)) {
+    Serial.println("Failed to read from sensors!");
+    return;
+  }
+  if (m == 0) {
+    digitalWrite(RELAY_PIN, LOW);  // Turn ON relay
+    Serial.println("Soil is DRY - RELAY ON!");
+  } else {
+    digitalWrite(RELAY_PIN, HIGH); // Turn OFF relay
+    Serial.println("Soil is WET - RELAY OFF!");
+  }
+
+  if (distance1 > 4) {
+    digitalWrite(RELAY2_PIN, HIGH);  // Turn ON second relay
+    Serial.println("Distance1 > 4 cm - RELAY2 ON!");
+  } else {
+    digitalWrite(RELAY2_PIN, LOW); // Turn OFF second relay
+    Serial.println("Distance1 <= 4 cm - RELAY2 OFF!");
+  }
+  
+  // Print sensor values to Serial Monitor
+  Serial.printf("Temp: %.2f°C, Humid: %.2f%%, pH: %.2f\n", temperature, humidity, phValue);
+  Serial.printf("Dist1: %.2f cm, T1: %.2f cm, T2: %.2f cm\n", distance1, distance2, distance3);
+   Serial.printf("Moisture Sensor Reading: %d\n", m);
+
+
+  // Display on LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.printf("T:%.1fC H:%.0f%%", temperature, humidity);
+
+  lcd.setCursor(0, 1);
+  lcd.printf("pH:%.2f Tank:%.0fcm", phValue, distance1);
+  delay(5000);
+  lcd.clear();
+  lcd.setCursor(0, 1);
+  lcd.printf("T1:%.0fcm T2:%.0fcm", distance2, distance3);
+
+  // Publish data to Adafruit IO
+  if (!tempFeed.publish(temperature))Serial.println("Failed to publish temperature!");
+  if (!humidFeed.publish(humidity))  Serial.println("Failed to publish humidity!");
+  if (!phFeed.publish(phValue))      Serial.println("Failed to publish pH!");
+  if (!dist1Feed.publish(distance1)) Serial.println("Failed to publish distance1!");
+  if (!dist2Feed.publish(distance2)) Serial.println("Failed to publish distance2!");
+  if (!dist3Feed.publish(distance3)) Serial.println("Failed to publish distance3!");
+
+  mqtt.processPackets(10000); // Process incoming packets every 10 seconds
+
+  delay(1000); // Wait 15 seconds before publishing again
+}
+
