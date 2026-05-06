@@ -33,6 +33,9 @@ using real-time monitoring and intelligent irrigation control.
 - Automated irrigation functioning
 - Remote app control working
 
+## Photos
+[image alt]https://github.com/rahmansheikh340-beep/Rooftop-Plant-Monitoring-System/blob/49c715862bede39058d7dcdf59df932f3cd1ffa1/image.png)
+
 ## 🚀 Future Work
 - AI-based disease detection
 - Solar-powered system
